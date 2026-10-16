@@ -1,0 +1,33 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+
+# Gerados pelo pip install -e .
+*.egg-info/
+build/
+dist/
+
+# Segredos
+.env
+
+# Dados e bancos locais (base de CNPJ, SQLite)
+data/
+*.db
+*.sqlite3
+
+# Saídas geradas pelo robô (fichas, relatórios)
+saida/
+
+# Testes
+.pytest_cache/
+.coverage
+
+# Editor e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
