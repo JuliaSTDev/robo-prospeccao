@@ -1,10 +1,51 @@
 # robo-prospeccao
-Pipeline de prospecção em Python com coletores e enriquecedores plugáveis, nota explicável por sinais e aprovação humana.
+
+Pipeline de prospecção em Python com coletores e enriquecedores plugáveis, nota explicável por sinais e aprovação humana. Inspirado nos actors da Apify.
+
+Gera uma lista de empresas de um nicho e uma cidade, descobre o site de cada uma e exporta uma ficha com links para verificar à mão. Nenhuma abordagem é automática: uma pessoa revisa e aprova antes de qualquer contato.
+
+## Como funciona
+
+1. **Lista:** coleta as empresas ativas do nicho e da cidade na base aberta de CNPJ da Receita.
+2. **Site:** descobre o site provável pelo domínio do e-mail cadastral, descartando e-mails gratuitos, contadores e redes.
+3. **Ficha:** exporta os melhores leads em Markdown, com links de busca (Google, Instagram, Reclame Aqui, Meta Ad Library). O robô só monta os links, não acessa essas páginas.
+
+## Como rodar
+
+Exemplo para Windows (PowerShell):
+
+```
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+1. Baixe os arquivos da Receita (seção abaixo) e coloque em `data/`, sem descompactar.
+2. Rode:
+```
+   python -X utf8 main.py
+```
+3. A ficha sai em `data/fichas_top20.md`.
+
+Nicho (CNAE) e cidade (código do município) são definidos no `main.py`.
+
+## Estrutura
+
+```
+main.py                         # roda o fluxo: lista -> site -> ficha
+src/robo/
+  models.py                     # Lead, Sinal, Execucao
+  coletores/cnpj_receita.py     # lê a base da Receita e devolve Leads
+  enriquecedores/site_do_email.py  # descobre o site pelo e-mail
+  exportadores/ficha.py         # seleciona o top e gera a ficha em Markdown
+scripts/                        # exploração e análise avulsas
+data/                           # bases e saídas, fora do Git
+```
 
 ## Dados: base aberta de CNPJ da Receita Federal
 
 **Fonte:** repositório de arquivos da Receita Federal (SERPRO+), pasta `Dados > Cadastros > CNPJ`.
-- Endereço: (https://arquivos.receitafederal.gov.br/index.php/s/gn672Ad4CF8N6TK?dir=/Dados/Cadastros/CNPJ)
+- Endereço: https://arquivos.receitafederal.gov.br/index.php/s/gn672Ad4CF8N6TK?dir=/Dados/Cadastros/CNPJ
 - Mês usado: 2026-10
 - A Receita já mudou o endereço mais de uma vez. Se o link quebrar, procure a pasta `Dados > Cadastros > CNPJ` na raiz do repositório.
 
@@ -13,6 +54,7 @@ Pipeline de prospecção em Python com coletores e enriquecedores plugáveis, no
 | Arquivo | Conteúdo |
 |---|---|
 | `Estabelecimentos0.zip` a `9.zip` | Dados de cada estabelecimento (endereço, CNAE, contato, situação) |
+| `Empresas0.zip` a `9.zip` | Dados da empresa (razão social, porte, natureza jurídica) |
 | `Municipios.zip` | Código do município → nome |
 | `Cnaes.zip` | Código CNAE → descrição |
 
@@ -52,6 +94,13 @@ Demais colunas: 6 (data da situação), 7 (motivo), 8 e 9 (exterior), 23 a 26 (t
 
 - Filtrar município pelo **código**, nunca pelo nome (há cidades homônimas).
 - Razão social e porte ficam no arquivo **Empresas**, ligado pelo CNPJ básico.
-- **LGPD:** a base contém dados de contato de pessoas físicas (MEI). Os dados ficam fora do Git e são usados só para contato comercial B2B pertinente.
+- A base tem placeholders (telefones como `0000000000`, e-mails inválidos). O coletor valida na entrada.
+- O e-mail cadastral pode ser do contador ou de outra empresa. O site descoberto por ele é só um palpite, por isso a ficha o marca como "não verificado".
+- **LGPD:** a base contém dados de contato de pessoas físicas (MEI). Empresário individual e MEI são excluídos. Os dados ficam fora do Git, não se publicam CNPJ, e-mail ou telefone reais, e o uso é só para contato comercial B2B pertinente.
 
 Para explorar a base: `python scripts/explorar_cnpj.py`
+
+## Status
+
+- Pronto: coletor da Receita, descoberta de site pelo e-mail, ficha com links de verificação.
+- Próximos passos: limpeza de dados, leitura do site com sinais (WhatsApp, pixel, chat), nota de 0 a 100 com motivo, banco SQLite e resumo no Telegram.
