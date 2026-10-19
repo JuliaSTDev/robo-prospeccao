@@ -1,10 +1,15 @@
-import pandas as pd
-from pathlib import Path
-from robo.models import Lead
 from datetime import date
-import re
+from pathlib import Path
 
-PADRAO_EMAIL = re.compile(r"^[^@\s]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
+import pandas as pd
+
+from robo.limpeza import (
+    NATUREZA_EMPRESARIO_INDIVIDUAL,
+    deve_evitar_contato,
+    padronizar_email,
+    padronizar_telefone,
+)
+from robo.models import Lead
 
 # Colunas que interessam no arquivo Estabelecimentos (posição → nome)
 COLUNAS = {
@@ -33,7 +38,6 @@ COLUNAS_EMPRESAS = {
 }
 
 SITUACAO_ATIVA = "02"
-NATUREZA_EMPRESARIO_INDIVIDUAL = "2135"
 TAMANHO_PEDACO = 200_000
 
 
@@ -92,6 +96,7 @@ def _limpar(valor) -> str | None:
     texto = str(valor).strip()
     return texto or None
 
+
 def montar_cnpj(linha: pd.Series) -> str:
     """Junta as 3 partes do CNPJ em um texto de 14 dígitos."""
     return linha["cnpj_basico"] + linha["cnpj_ordem"] + linha["cnpj_dv"]
@@ -106,30 +111,12 @@ def converter_data(texto: str) -> date | None:
     except ValueError:
         return None
 
-def _email_valido(email: str | None) -> str | None:
-    """Devolve o e-mail em minúsculas se o formato for válido; senão None."""
-    if not email:
-        return None
-    email = email.lower()
-    return email if PADRAO_EMAIL.match(email) else None
-
-
-def _telefone_valido(ddd: str | None, numero: str | None) -> str | None:
-    """Junta DDD e número, descartando placeholders como 11111111 ou 00000001."""
-    if not ddd or not numero:
-        return None
-    if len(set(numero)) == 1 or numero.count("0") >= 6:
-        return None
-    return ddd + numero
-
 
 def linha_para_lead(linha: pd.Series) -> Lead:
     """Converte uma linha da tabela (já com dados da empresa) em um Lead."""
-    telefone = _telefone_valido(_limpar(linha["ddd"]), _limpar(linha["telefone"]))
-    email = _email_valido(_limpar(linha["email"]))
-
-    if email:
-        email = email.lower()
+    ddd = _limpar(linha["ddd"]) or ""
+    numero = _limpar(linha["telefone"]) or ""
+    evitar = deve_evitar_contato(linha["razao_social"], linha["natureza_juridica"])
 
     return Lead(
         cnpj=montar_cnpj(linha),
@@ -141,9 +128,11 @@ def linha_para_lead(linha: pd.Series) -> Lead:
         data_abertura=converter_data(linha["data_abertura"]),
         matriz_filial=linha["matriz_filial"],
         nome_fantasia=_limpar(linha["nome_fantasia"]),
-        telefone=telefone,
-        email=email,
+        telefone=padronizar_telefone(ddd + numero),
+        email=padronizar_email(_limpar(linha["email"])),
+        status="evitar_contato" if evitar else "novo",
     )
+
 
 def coletar(cnae: str, municipio: str, pasta: str = "data") -> list[Lead]:
     """Coleta leads do nicho/cidade na base da Receita, sem empresário individual."""
@@ -164,9 +153,12 @@ def coletar(cnae: str, municipio: str, pasta: str = "data") -> list[Lead]:
 
     return [linha_para_lead(linha) for _, linha in sem_individual.iterrows()]
 
+
 if __name__ == "__main__":
     leads = coletar(cnae="8593700", municipio="7107")
+    evitar = sum(1 for lead in leads if lead.status == "evitar_contato")
+    com_telefone = sum(1 for lead in leads if lead.telefone)
+    com_email = sum(1 for lead in leads if lead.email)
     print(f"Leads coletados: {len(leads)}")
-    for lead in leads[:3]:
-        print(lead)
-    
+    print(f"Evitar contato (CPF no nome): {evitar}")
+    print(f"Com telefone: {com_telefone} | Com e-mail: {com_email}")
