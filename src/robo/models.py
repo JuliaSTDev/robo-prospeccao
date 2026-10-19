@@ -20,8 +20,8 @@ class Lead:
     municipio: str
     uf: str
     porte: str
-    data_abertura: date
     matriz_filial: str
+    data_abertura: date | None
     nome_fantasia: str | None = None
     telefone: str | None = None
     email: str | None = None
