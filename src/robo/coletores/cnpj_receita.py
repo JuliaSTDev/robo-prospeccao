@@ -2,6 +2,9 @@ import pandas as pd
 from pathlib import Path
 from robo.models import Lead
 from datetime import date
+import re
+
+PADRAO_EMAIL = re.compile(r"^[^@\s]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 
 # Colunas que interessam no arquivo Estabelecimentos (posição → nome)
 COLUNAS = {
@@ -103,14 +106,28 @@ def converter_data(texto: str) -> date | None:
     except ValueError:
         return None
 
+def _email_valido(email: str | None) -> str | None:
+    """Devolve o e-mail em minúsculas se o formato for válido; senão None."""
+    if not email:
+        return None
+    email = email.lower()
+    return email if PADRAO_EMAIL.match(email) else None
+
+
+def _telefone_valido(ddd: str | None, numero: str | None) -> str | None:
+    """Junta DDD e número, descartando placeholders como 11111111 ou 00000001."""
+    if not ddd or not numero:
+        return None
+    if len(set(numero)) == 1 or numero.count("0") >= 6:
+        return None
+    return ddd + numero
+
 
 def linha_para_lead(linha: pd.Series) -> Lead:
     """Converte uma linha da tabela (já com dados da empresa) em um Lead."""
-    ddd = _limpar(linha["ddd"])
-    numero = _limpar(linha["telefone"])
-    telefone = ddd + numero if ddd and numero else None
+    telefone = _telefone_valido(_limpar(linha["ddd"]), _limpar(linha["telefone"]))
+    email = _email_valido(_limpar(linha["email"]))
 
-    email = _limpar(linha["email"])
     if email:
         email = email.lower()
 
