@@ -1,4 +1,7 @@
 import pandas as pd
+from pathlib import Path
+from robo.models import Lead
+from datetime import date
 
 # Colunas que interessam no arquivo Estabelecimentos (posição → nome)
 COLUNAS = {
@@ -79,33 +82,74 @@ def buscar_empresas(caminhos: list[str], cnpjs_basicos: set[str]) -> pd.DataFram
     return pd.concat(encontrados, ignore_index=True)
 
 
-if __name__ == "__main__":
-    from pathlib import Path
+def _limpar(valor) -> str | None:
+    """Devolve o texto sem espaços, ou None se estiver vazio."""
+    if pd.isna(valor):
+        return None
+    texto = str(valor).strip()
+    return texto or None
 
-    # Path("data").glob("Estabelecimentos*.zip") acha todos os arquivos que
-    # combinam com o padrão; sorted() deixa em ordem (0, 1, 2...)
-    arquivos_estab = sorted(Path("data").glob("Estabelecimentos*.zip"))
-    arquivos_emp = sorted(Path("data").glob("Empresas*.zip"))
-    print(f"Arquivos: {len(arquivos_estab)} Estabelecimentos, {len(arquivos_emp)} Empresas")
+def montar_cnpj(linha: pd.Series) -> str:
+    """Junta as 3 partes do CNPJ em um texto de 14 dígitos."""
+    return linha["cnpj_basico"] + linha["cnpj_ordem"] + linha["cnpj_dv"]
 
-    # 1) filtra cada arquivo de Estabelecimentos e junta tudo
-    partes = []
-    for arquivo in arquivos_estab:
-        parte = filtrar_estabelecimentos(str(arquivo), cnae="8593700", municipio="7107")
-        print(f"  {arquivo.name}: {len(parte)}")
-        partes.append(parte)
-    escolas = pd.concat(partes, ignore_index=True)
-    print(f"Escolas no filtro: {len(escolas)}")
 
-    # 2) busca a empresa de cada uma em TODOS os arquivos de Empresas
-    cnpjs = set(escolas["cnpj_basico"])
-    empresas = buscar_empresas([str(a) for a in arquivos_emp], cnpjs)
-    print(f"Empresas encontradas: {len(empresas)}")
+def converter_data(texto: str) -> date | None:
+    """Converte 'AAAAMMDD' em date. Devolve None se vier vazio ou inválido."""
+    if not isinstance(texto, str) or len(texto) != 8 or texto == "00000000":
+        return None
+    try:
+        return date(int(texto[0:4]), int(texto[4:6]), int(texto[6:8]))
+    except ValueError:
+        return None
 
-    # 3) junta e tira empresário individual
-    juntas = escolas.merge(empresas, on="cnpj_basico", how="inner")
+
+def linha_para_lead(linha: pd.Series) -> Lead:
+    """Converte uma linha da tabela (já com dados da empresa) em um Lead."""
+    ddd = _limpar(linha["ddd"])
+    numero = _limpar(linha["telefone"])
+    telefone = ddd + numero if ddd and numero else None
+
+    email = _limpar(linha["email"])
+    if email:
+        email = email.lower()
+
+    return Lead(
+        cnpj=montar_cnpj(linha),
+        razao_social=linha["razao_social"],
+        cnae=linha["cnae"],
+        municipio=linha["municipio"],
+        uf=linha["uf"],
+        porte=linha["porte"],
+        data_abertura=converter_data(linha["data_abertura"]),
+        matriz_filial=linha["matriz_filial"],
+        nome_fantasia=_limpar(linha["nome_fantasia"]),
+        telefone=telefone,
+        email=email,
+    )
+
+def coletar(cnae: str, municipio: str, pasta: str = "data") -> list[Lead]:
+    """Coleta leads do nicho/cidade na base da Receita, sem empresário individual."""
+    arquivos_estab = sorted(Path(pasta).glob("Estabelecimentos*.zip"))
+    arquivos_emp = sorted(Path(pasta).glob("Empresas*.zip"))
+    if not arquivos_estab or not arquivos_emp:
+        raise FileNotFoundError(f"Não achei os arquivos da Receita em '{pasta}/'")
+
+    partes = [filtrar_estabelecimentos(str(a), cnae, municipio) for a in arquivos_estab]
+    estabelecimentos = pd.concat(partes, ignore_index=True)
+
+    empresas = buscar_empresas(
+        [str(a) for a in arquivos_emp], set(estabelecimentos["cnpj_basico"])
+    )
+
+    juntas = estabelecimentos.merge(empresas, on="cnpj_basico", how="inner")
     sem_individual = juntas[juntas["natureza_juridica"] != NATUREZA_EMPRESARIO_INDIVIDUAL]
-    print(f"Depois de excluir empresário individual: {len(sem_individual)}")
 
-    print(juntas["natureza_juridica"].value_counts())
+    return [linha_para_lead(linha) for _, linha in sem_individual.iterrows()]
+
+if __name__ == "__main__":
+    leads = coletar(cnae="8593700", municipio="7107")
+    print(f"Leads coletados: {len(leads)}")
+    for lead in leads[:3]:
+        print(lead)
     
