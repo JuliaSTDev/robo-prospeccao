@@ -52,7 +52,8 @@ def selecionar_top(leads: list[Lead], n: int = 20) -> list[Lead]:
     candidatos = [lead for lead in leads if not fora_do_perfil(lead)]
     ordenados = sorted(
         uma_por_empresa(candidatos),
-        key=lambda lead: (
+            key=lambda lead: (
+            -lead.nota,
             lead.site is None,
             lead.telefone is None,
             lead.porte not in {"03", "05"},
@@ -80,6 +81,8 @@ def ficha_markdown(lead: Lead, cidade: str) -> str:
         f"- **Site candidato (não verificado):** {lead.site or '—'}",
         "",
         f"**Verificar:** {verificar}",
+        "",
+        f"**Nota: {lead.nota}/10** — {lead.motivo_da_nota}",
         "",
     ]
     return "\n".join(linhas)
