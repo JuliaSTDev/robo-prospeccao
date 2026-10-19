@@ -1,22 +1,12 @@
-from datetime import date
+from robo.coletores.cnpj_receita import coletar
+from robo.enriquecedores.site_do_email import site_candidato
+from robo.exportadores.ficha import exportar_fichas, selecionar_top
 
-from robo.models import Execucao, Lead, Sinal
+leads = coletar(cnae="8593700", municipio="7107")
 
-execucao = Execucao(parametros={"nicho": "8593700", "cidade": "SAO PAULO"})
+for lead in leads:
+    lead.site = site_candidato(lead.email)
 
-lead = Lead(
-    cnpj="00623904000173",
-    razao_social="ESCOLA DE IDIOMAS EXEMPLO LTDA",
-    cnae="8593700",
-    municipio="SAO PAULO",
-    uf="SP",
-    porte="ME",
-    data_abertura=date(2015, 3, 12),
-    matriz_filial="matriz",
-)
-
-sinal = Sinal(lead_cnpj=lead.cnpj, fonte="site", tipo="whatsapp", valor="wa.me/5511999999999")
-
-print(execucao)
-print(lead)
-print(sinal)
+top = selecionar_top(leads, n=20)
+exportar_fichas(top, "data/fichas_top20.md", cidade="São Paulo")
+print(f"{len(leads)} leads coletados, {len(top)} fichas em data/fichas_top20.md")
