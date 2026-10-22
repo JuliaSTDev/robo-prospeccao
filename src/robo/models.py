@@ -26,6 +26,9 @@ class Lead:
     telefone: str | None = None
     email: str | None = None
     site: str | None = None
+    site_situacao: str | None = None  # confere, sem_site, nao_confere, inacessivel, bloqueado, revisar
+    site_motivo: str = ""              # por que chegou nessa situação
+    sinais: set[str] = field(default_factory=set)  # sinais detectados pelos enriquecedores
     nota: int = 0
     motivo_da_nota: str = ""
     status: str = "novo"
