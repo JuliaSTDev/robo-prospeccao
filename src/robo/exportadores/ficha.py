@@ -8,6 +8,28 @@ from robo.models import Lead
 
 SUFIXOS_SOCIETARIOS = re.compile(r"\b(LTDA|ME|EPP|EIRELI|S/S|S/?A)\b\.?", re.IGNORECASE)
 
+# Texto da ficha para cada situação do site (valores de Lead.site_situacao)
+ROTULOS_SITE = {
+    "confere": "confirmado",
+    "revisar": "revisar à mão",
+    "bloqueado": "bloqueia robô, abrir à mão",
+    "nao_confere": "o domínio do e-mail é de outra empresa",
+    "inacessivel": "fora do ar",
+    "sem_site": "sem domínio próprio no e-mail",
+}
+
+# Sinais que aparecem na ficha, na ordem em que aparecem
+ROTULOS_SINAIS = {
+    "whatsapp_no_site": "WhatsApp",
+    "instagram_no_site": "Instagram",
+    "meta_pixel": "Meta Pixel",
+    "google_tag": "Google Tag",
+    "so_formulario": "só formulário",
+    "sem_chat": "sem chat",
+    "site_inacessivel": "site fora do ar",
+}
+
+
 def nome_para_busca(lead: Lead) -> str:
     """Nome fantasia (ou razão social) sem 'LTDA', 'ME' etc., para buscar."""
     nome = lead.nome_fantasia or lead.razao_social
@@ -48,11 +70,11 @@ def fora_do_perfil(lead: Lead) -> bool:
 
 
 def selecionar_top(leads: list[Lead], n: int = 20) -> list[Lead]:
-    """Escolhe os n leads mais promissores. Critério provisório, até existir a nota."""
+    """Escolhe os n leads mais promissores: maior nota primeiro, com critérios de desempate."""
     candidatos = [lead for lead in leads if not fora_do_perfil(lead)]
     ordenados = sorted(
         uma_por_empresa(candidatos),
-            key=lambda lead: (
+        key=lambda lead: (
             -lead.nota,
             lead.site is None,
             lead.telefone is None,
@@ -61,6 +83,20 @@ def selecionar_top(leads: list[Lead], n: int = 20) -> list[Lead]:
         ),
     )
     return ordenados[:n]
+
+
+def descrever_site(lead: Lead) -> str:
+    """Site do lead com a situação da verificação, para a ficha."""
+    rotulo = ROTULOS_SITE.get(lead.site_situacao, "não verificado")
+    if lead.site:
+        return f"{lead.site} ({rotulo})"
+    return f"não encontrado ({rotulo})"
+
+
+def descrever_sinais(lead: Lead) -> str:
+    """Sinais detectados no site, em texto. '—' quando não há nenhum."""
+    partes = [rotulo for sinal, rotulo in ROTULOS_SINAIS.items() if sinal in lead.sinais]
+    return ", ".join(partes) or "—"
 
 
 def ficha_markdown(lead: Lead, cidade: str) -> str:
@@ -78,7 +114,8 @@ def ficha_markdown(lead: Lead, cidade: str) -> str:
         f"- **Porte:** {lead.porte}",
         f"- **Telefone:** {lead.telefone or '—'}",
         f"- **E-mail:** {lead.email or '—'}",
-        f"- **Site candidato (não verificado):** {lead.site or '—'}",
+        f"- **Site:** {descrever_site(lead)}",
+        f"- **Sinais no site:** {descrever_sinais(lead)}",
         "",
         f"**Verificar:** {verificar}",
         "",
@@ -100,5 +137,24 @@ if __name__ == "__main__":
     assert links["Google"] == (
         "https://www.google.com/search?q=Escola+A%C3%A7%C3%A3o+S%C3%A3o+Paulo"
     )
+
+    lead_teste = Lead(
+        cnpj="11111111000101", razao_social="ESCOLA TESTE LTDA", cnae="8593700",
+        municipio="7107", uf="SP", porte="03", matriz_filial="1",
+        data_abertura=date(2010, 1, 1), site="https://escola.com.br",
+        site_situacao="confere", sinais={"whatsapp_no_site", "sem_chat"},
+    )
+    assert descrever_site(lead_teste) == "https://escola.com.br (confirmado)"
+    assert descrever_sinais(lead_teste) == "WhatsApp, sem chat"
+
+    sem_nada = Lead(
+        cnpj="22222222000101", razao_social="OUTRA ESCOLA LTDA", cnae="8593700",
+        municipio="7107", uf="SP", porte="03", matriz_filial="1",
+        data_abertura=date(2010, 1, 1), site=None, site_situacao="sem_site",
+    )
+    assert descrever_site(sem_nada) == "não encontrado (sem domínio próprio no e-mail)"
+    assert descrever_sinais(sem_nada) == "—"
+
     for nome, link in links.items():
         print(f"{nome}: {link}")
+    print("Tudo certo")
