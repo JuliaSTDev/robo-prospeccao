@@ -38,7 +38,7 @@ def pontuar(sinais: set[str]) -> tuple[int, str]:
 
 def sinais_do_lead(lead: Lead, qtd_unidades: int) -> set[str]:
     """Sinais que já conseguimos tirar do lead, sem ler o site."""
-    sinais = set()
+    sinais = set(lead.sinais)  # o que os enriquecedores já marcaram (ex.: site_inacessivel)
     if lead.site is None:
         sinais.add("sem_site")
     if qtd_unidades > 1:

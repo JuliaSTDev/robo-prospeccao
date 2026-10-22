@@ -1,60 +1,35 @@
+"""Conta de onde vêm os domínios de e-mail dos leads (sem acessar a internet).
+
+Usa as MESMAS listas do enriquecedor, para a análise bater com o que o robô faz.
+Pré-requisito: data/leads_idiomas_sp.csv (gerado por scripts/gerar_csv_leads.py).
+"""
 import pandas as pd
-from robo.enriquecedores.site_do_email import LIVRES, CONTADORES, REDES
 
-# Provedores de e-mail gratuito: não levam a nenhum site
-LIVRES = {
-    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "yahoo.com.br",
-    "uol.com.br", "bol.com.br", "icloud.com", "live.com", "terra.com.br",
-    "ig.com.br", "msn.com",
-}
+from robo.enriquecedores.site_do_email import CONTADORES, IGNORADOS, LIVRES, REDES
 
 df = pd.read_csv("data/leads_idiomas_sp.csv", dtype=str)
 
 # "abertura@contabilizei.com.br" -> "contabilizei.com.br"
-df["dominio"] = df["email"].str.split("@").str[1]
+df["dominio"] = df["email"].str.split("@").str[1].str.lower()
 
-contagem = df["dominio"].value_counts()
-
-# Provedores de e-mail gratuito: não levam a nenhum site
-LIVRES = {
-    "gmail.com", "hotmail.com", "outlook.com", "outlook.com.br", "yahoo.com",
-    "yahoo.com.br", "uol.com.br", "bol.com.br", "icloud.com", "live.com",
-    "terra.com.br", "ig.com.br", "msn.com", "globo.com",
-}
-
-CONTADORES = {
-    "contabilizei.com.br", "escon.com.br", "aspiralcont.com.br",
-    "fmcontabil.com.br", "zapcontabil.com.br", "fscontroller.com.br",
-    "meirafernandes.com.br",
-}
-
-REDES = {
-    "cna.com.br", "culturainglesasp.com.br", "culturainglesa.com.br",
-    "wizard.com.br", "ewizard.com.br", "redballoon.com.br", "berlitz.com.br",
-    "escolasfisk.com.br", "escolafisk.com.br", "somoseducacao.com.br",
-}
-df = pd.read_csv("data/leads_idiomas_sp.csv", dtype=str)
-
-# "abertura@contabilizei.com.br" -> "contabilizei.com.br"
-df["dominio"] = df["email"].str.split("@").str[1]
-
-contagem = df["dominio"].value_counts()
+eh_contador = df["dominio"].isin(CONTADORES) | df["dominio"].str.contains("contab", na=False)
+descartados = LIVRES | REDES | IGNORADOS
 
 sem_email = df["dominio"].isna().sum()
 livres = df["dominio"].isin(LIVRES).sum()
-contador = df["dominio"].isin(CONTADORES).sum()
+contador = eh_contador.sum()
 redes = df["dominio"].isin(REDES).sum()
-proprios = (
-    df["dominio"].notna()
-    & ~df["dominio"].isin(LIVRES | CONTADORES | REDES)
-).sum()
+ignorados = df["dominio"].isin(IGNORADOS).sum()
+proprios = (df["dominio"].notna() & ~df["dominio"].isin(descartados) & ~eh_contador).sum()
 
-print(f"Total de leads:      {len(df)}")
-print(f"Sem e-mail:          {sem_email}")
-print(f"E-mail gratuito:     {livres}")
-print(f"Contador:            {contador}")
-print(f"Rede de franquia:    {redes}")
-print(f"Domínio próprio:     {proprios}")
+total = len(df)
+print(f"Total de leads:      {total}")
+print(f"Sem e-mail:          {sem_email} ({sem_email / total:.0%})")
+print(f"E-mail gratuito:     {livres} ({livres / total:.0%})")
+print(f"Contador:            {contador} ({contador / total:.0%})")
+print(f"Rede de franquia:    {redes} ({redes / total:.0%})")
+print(f"Ignorados (errados): {ignorados}")
+print(f"Domínio próprio:     {proprios} ({proprios / total:.0%})")
 
-print()
-print(contagem.head(40))
+print("\nDomínios mais frequentes:")
+print(df["dominio"].value_counts().head(40))
