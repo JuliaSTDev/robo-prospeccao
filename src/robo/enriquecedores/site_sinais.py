@@ -3,6 +3,7 @@
 Regras de boa conduta: respeita o robots.txt, faz UMA visita por site, usa timeout
 e se identifica com um User-Agent claro. Erro de leitura nunca quebra o robô.
 """
+import logging
 import time
 from collections import Counter
 from datetime import date
@@ -14,6 +15,8 @@ from bs4 import BeautifulSoup
 
 from robo.enriquecedores.verificar_site import CONFERE
 from robo.models import Lead
+
+log = logging.getLogger(__name__)
 
 USER_AGENT = "robo-prospeccao/0.1 (projeto de estudo; +https://github.com/JuliaSTDev/robo-prospeccao)"
 TIMEOUT_SEGUNDOS = 8
@@ -109,18 +112,24 @@ def enriquecer_sinais(leads: list[Lead], pausa: float = 1.5, mostrar: bool = Tru
     """Lê os sinais dos sites confirmados (situação 'confere') e grava em lead.sinais.
 
     Quem não está 'confere' é ignorado: sinal de site de outra empresa não vale.
-    Domínio repetido é lido uma vez só. Se não der para ler, o lead segue sem sinais novos.
+    Domínio repetido é lido uma vez só. Se um lead falhar, o erro é registrado
+    (contagem['erro']) e a execução continua.
     """
     contagem: Counter = Counter()
     cache: dict[str, set[str] | None] = {}
     candidatos = [lead for lead in leads if lead.site_situacao == CONFERE and lead.site]
 
     for i, lead in enumerate(candidatos, start=1):
-        dominio = _dominio(lead.site)
-        if dominio not in cache:
-            cache[dominio] = ler_sinais_do_site(lead.site)
-            time.sleep(pausa)  # só pausa quando acessou a internet
-        sinais = cache[dominio]
+        try:
+            dominio = _dominio(lead.site)
+            if dominio not in cache:
+                cache[dominio] = ler_sinais_do_site(lead.site)
+                time.sleep(pausa)  # só pausa quando acessou a internet
+            sinais = cache[dominio]
+        except Exception:
+            log.exception("Falha ao ler os sinais do lead %s", lead.cnpj[:8])
+            contagem["erro"] += 1
+            continue
 
         if sinais is None:
             contagem["nao_leu"] += 1
@@ -128,7 +137,8 @@ def enriquecer_sinais(leads: list[Lead], pausa: float = 1.5, mostrar: bool = Tru
             lead.sinais.update(sinais)
             contagem["leu"] += 1
         if mostrar:
-            print(f"[{i}/{len(candidatos)}] {'leu' if sinais is not None else 'não leu':<8} {lead.site}")
+            log.info("[%d/%d] %-8s %s", i, len(candidatos),
+                     "leu" if sinais is not None else "não leu", lead.site)
 
     return contagem
 
@@ -158,6 +168,12 @@ if __name__ == "__main__":
                 uf="SP", porte="03", matriz_filial="1", data_abertura=date(2010, 1, 1),
                 site="https://escola-teste.com.br", site_situacao="nao_confere")
     assert enriquecer_sinais([lead], pausa=0, mostrar=False) == Counter()
+    assert lead.sinais == set()
+
+    # um lead com dado corrompido não derruba a execução
+    lead.site_situacao = CONFERE
+    lead.site = 12345
+    assert enriquecer_sinais([lead], pausa=0, mostrar=False)["erro"] == 1
     assert lead.sinais == set()
 
     print("Testes ok")

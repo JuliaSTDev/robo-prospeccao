@@ -8,6 +8,7 @@ Fluxo por lead:
     abre e é de outra empresa -> nao_confere  (site = None, vira "sem site")
     IA com confiança baixa    -> revisar      (mantém o site para olhar à mão)
 """
+import logging
 import time
 from collections import Counter
 from urllib.parse import urlparse
@@ -15,6 +16,8 @@ from urllib.parse import urlparse
 from robo.enriquecedores.site_confere import confere_site
 from robo.enriquecedores.site_responde import ABRIU, BLOQUEADO, checar_site
 from robo.models import Lead
+
+log = logging.getLogger(__name__)
 
 CONFERE = "confere"
 SEM_SITE = "sem_site"
@@ -79,26 +82,35 @@ def verificar_site(lead: Lead, nicho: str, usar_ia: bool = True) -> str:
 
 def verificar_sites(leads: list[Lead], nicho: str, usar_ia: bool = True,
                     pausa: float = 1.5, mostrar: bool = True) -> Counter:
-    """Verifica todos os leads. Domínio repetido é verificado uma vez só (cache)."""
+    """Verifica todos os leads. Domínio repetido é verificado uma vez só (cache).
+
+    Se a verificação de um lead falhar, o erro é registrado, o lead vai para 'revisar'
+    e a execução continua. Os erros também são contados em contagem['erro'].
+    """
     cache: dict[str, tuple[str, str, str | None]] = {}
     contagem: Counter = Counter()
 
     for i, lead in enumerate(leads, start=1):
-        dominio = _dominio(lead.site) if lead.site else None
+        try:
+            dominio = _dominio(lead.site) if lead.site else None
 
-        if dominio and dominio in cache:
-            situacao, motivo, url_final = cache[dominio]
-            aplicar_resultado(lead, situacao, motivo, url_final)
-        else:
-            verificar_site(lead, nicho, usar_ia)
-            if dominio:
-                cache[dominio] = (lead.site_situacao, lead.site_motivo, lead.site)
-                time.sleep(pausa)  # só pausa quando acessou a internet
+            if dominio and dominio in cache:
+                situacao, motivo, url_final = cache[dominio]
+                aplicar_resultado(lead, situacao, motivo, url_final)
+            else:
+                verificar_site(lead, nicho, usar_ia)
+                if dominio:
+                    cache[dominio] = (lead.site_situacao, lead.site_motivo, lead.site)
+                    time.sleep(pausa)  # só pausa quando acessou a internet
+        except Exception as erro:
+            log.exception("Falha ao verificar o lead %s", lead.cnpj[:8])
+            aplicar_resultado(lead, REVISAR, f"erro ao verificar ({type(erro).__name__})")
+            contagem["erro"] += 1
 
         contagem[lead.site_situacao] += 1
         if mostrar:
-            print(f"[{i}/{len(leads)}] {lead.site_situacao:<12} {lead.site_motivo[:45]:<45} "
-                  f"{lead.site or '-'}")
+            log.info("[%d/%d] %-12s %.45s %s", i, len(leads),
+                     lead.site_situacao, lead.site_motivo, lead.site or "-")
 
     return contagem
 
@@ -157,5 +169,13 @@ if __name__ == "__main__":
     assert verificar_site(e, "educacao") == SEM_SITE and e.site is None
 
     assert _dominio("https://www.Escola.com.br/contato") == "escola.com.br"
+
+    # um lead com dado corrompido não derruba a execução
+    ruim = lead_teste(12345)  # site que não é texto
+    contagem = verificar_sites([lead_teste(None), ruim, lead_teste(None)],
+                               "educacao", usar_ia=False, pausa=0, mostrar=False)
+    assert contagem["erro"] == 1 and contagem[SEM_SITE] == 2
+    assert ruim.site_situacao == REVISAR
+
     print(relatorio_sites([a, b, c, d, e]))
     print("Tudo certo")
