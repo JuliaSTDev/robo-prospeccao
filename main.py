@@ -1,41 +1,49 @@
-import sys
+"""Ponto de entrada do robô: configura o log e chama o pipeline.
 
-from robo.coletores.cnpj_receita import coletar
-from robo.enriquecedores.site_do_email import site_candidato
-from robo.enriquecedores.site_sinais import enriquecer_sinais
-from robo.enriquecedores.verificar_site import verificar_sites
-from robo.exportadores.ficha import exportar_fichas, selecionar_top
-from robo.pontuacao import pontuar_leads
+Uso:
+    python -X utf8 main.py            # completo: verifica sites e lê sinais (demora)
+    python -X utf8 main.py --sem-ia   # completo, sem gastar cota de IA
+    python -X utf8 main.py --rapido   # sem verificar sites nem ler sinais
+"""
+import logging
+import sys
+from pathlib import Path
+
+from robo.pipeline import rodar
 
 CNAE = "8593700"      # ensino de idiomas
 MUNICIPIO = "7107"    # São Paulo (código da Receita)
 NICHO = "educacao"
 CIDADE = "São Paulo"
+SAIDA = "data/fichas_top20.md"
 
-# Uso:
-#   python -X utf8 main.py            # completo: verifica sites e lê sinais (demora)
-#   python -X utf8 main.py --sem-ia   # completo, sem gastar cota de IA
-#   python -X utf8 main.py --rapido   # sem verificar sites nem ler sinais
-usar_ia = "--sem-ia" not in sys.argv
-rapido = "--rapido" in sys.argv
+log = logging.getLogger("main")
 
-leads = coletar(cnae=CNAE, municipio=MUNICIPIO)
 
-for lead in leads:
-    lead.site = site_candidato(lead.email)
+def configurar_log() -> None:
+    """Define o nível, o formato e o destino do log: tela e arquivo."""
+    Path("data").mkdir(exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler("data/robo.log", encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
 
-if rapido:
-    print("Modo rápido: sites NÃO verificados e sinais NÃO lidos.\n")
-else:
-    verificar_sites(leads, NICHO, usar_ia=usar_ia)
-    print()
-    enriquecer_sinais(leads)
 
-pontuar_leads(leads)
+def main() -> None:
+    configurar_log()
+    try:
+        rodar(
+            cnae=CNAE, municipio=MUNICIPIO, nicho=NICHO, cidade=CIDADE, saida=SAIDA,
+            usar_ia="--sem-ia" not in sys.argv, rapido="--rapido" in sys.argv,
+        )
+    except Exception:
+        log.exception("Execução interrompida por um erro")
+        sys.exit(1)
 
-top = selecionar_top(leads, n=20)
-exportar_fichas(top, "data/fichas_top20.md", cidade=CIDADE)
 
-com_sinais = sum(1 for lead in top if lead.sinais)
-print(f"\n{len(leads)} leads coletados, {len(top)} fichas em data/fichas_top20.md")
-print(f"{com_sinais} dos {len(top)} primeiros têm sinais registrados")
+if __name__ == "__main__":
+    main()
