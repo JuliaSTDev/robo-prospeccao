@@ -1,14 +1,17 @@
 """Ponto de entrada do robô: configura o log e chama o pipeline.
 
 Uso:
-    python -X utf8 main.py            # completo: verifica sites e lê sinais (demora)
-    python -X utf8 main.py --sem-ia   # completo, sem gastar cota de IA
-    python -X utf8 main.py --rapido   # sem verificar sites nem ler sinais
+    python -X utf8 main.py              # completo: verifica sites, lê sinais e guarda no Supabase
+    python -X utf8 main.py --sem-ia     # completo, sem gastar cota de IA
+    python -X utf8 main.py --rapido     # sem verificar sites nem ler sinais (não salva no banco)
+    python -X utf8 main.py --do-banco   # pula a coleta: refaz a nota e as fichas com os leads já guardados
+    python -X utf8 main.py --sem-banco  # roda sem o Supabase (nada é lido nem guardado)
 """
 import logging
 import sys
 from pathlib import Path
 
+from robo.armazenamento import conectar
 from robo.pipeline import rodar
 
 CNAE = "8593700"      # ensino de idiomas
@@ -36,9 +39,11 @@ def configurar_log() -> None:
 def main() -> None:
     configurar_log()
     try:
+        banco = None if "--sem-banco" in sys.argv else conectar()
         rodar(
             cnae=CNAE, municipio=MUNICIPIO, nicho=NICHO, cidade=CIDADE, saida=SAIDA,
             usar_ia="--sem-ia" not in sys.argv, rapido="--rapido" in sys.argv,
+            banco=banco, do_banco="--do-banco" in sys.argv,
         )
     except Exception:
         log.exception("Execução interrompida por um erro")
