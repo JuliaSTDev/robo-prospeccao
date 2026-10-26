@@ -11,6 +11,7 @@ from robo.armazenamento import (
     linha_para_lead,
     salvar_execucao,
     salvar_leads,
+    verificar_conexao,
 )
 from robo.models import Execucao
 
