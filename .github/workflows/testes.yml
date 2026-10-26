@@ -1,0 +1,25 @@
+# Roda os testes a cada push. Não usa nenhum segredo: os testes são todos sem internet.
+name: Testes
+
+on: push
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.15"
+          cache: pip
+
+      - name: Instalar as dependências
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Rodar os testes
+        run: pytest

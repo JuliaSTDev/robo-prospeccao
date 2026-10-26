@@ -1,5 +1,7 @@
 # robo-prospeccao
 
+![Testes](https://github.com/JuliaSTDev/robo-prospeccao/actions/workflows/testes.yml/badge.svg)
+
 Pipeline de prospecção em Python com coletores e enriquecedores plugáveis, nota explicável por sinais e aprovação humana. Inspirado nos actors da Apify.
 
 Gera uma lista de empresas de um nicho e uma cidade, descobre o site de cada uma e exporta uma ficha com links para verificar à mão. Nenhuma abordagem é automática: uma pessoa revisa e aprova antes de qualquer contato.
@@ -28,6 +30,26 @@ pip install -r requirements.txt
 3. A ficha sai em `data/fichas_top20.md`.
 
 Nicho (CNAE) e cidade (código do município) são definidos no `main.py`.
+
+## Testes
+
+```
+pip install -r requirements.txt
+pip install -e .
+pytest
+```
+
+Os testes não usam internet nem chaves: o banco, o Telegram e os sites são trocados por falsos. O GitHub Actions roda o `pytest` a cada push (`.github/workflows/testes.yml`) e o selo no topo mostra o resultado.
+
+## Rodar com Docker
+
+```
+docker build -t robo-prospeccao .
+docker run --rm robo-prospeccao pytest
+docker run --rm --env-file .env -v "${PWD}/data:/app/data" robo-prospeccao python main.py --do-banco
+```
+
+O `.env` (chaves) e a pasta `data/` não entram na imagem: são entregues só na hora do `docker run`.
 
 ## Estrutura
 
