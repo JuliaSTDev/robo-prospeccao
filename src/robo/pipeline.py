@@ -5,6 +5,7 @@ Cada execução é descrita por uma Execucao (início, fim, quantos leads, quant
 
 O banco (Supabase) é opcional: sem ele o robô roda igual, só não guarda nada.
 Com do_banco=True o robô pula a coleta lenta e trabalha com os leads já guardados.
+O notificador (Telegram) também é opcional: é uma função que recebe o texto do resumo e o envia.
 """
 import logging
 from datetime import date, datetime
@@ -16,6 +17,7 @@ from robo.enriquecedores.site_sinais import enriquecer_sinais
 from robo.enriquecedores.verificar_site import verificar_sites
 from robo.exportadores.ficha import exportar_fichas, selecionar_top
 from robo.models import Execucao, Lead
+from robo.notificadores.telegram import montar_resumo
 from robo.pontuacao import pontuar_leads
 
 log = logging.getLogger(__name__)
@@ -45,7 +47,7 @@ def guardar_leads(leads: list[Lead], banco) -> int:
 
 def rodar(cnae: str, municipio: str, nicho: str, cidade: str, saida: str,
           usar_ia: bool = True, rapido: bool = False, qtd_fichas: int = 20,
-          banco=None, do_banco: bool = False) -> Execucao:
+          banco=None, do_banco: bool = False, notificador=None) -> Execucao:
     """Roda o robô de ponta a ponta e devolve o registro da execução."""
     if do_banco and banco is None:
         raise ValueError("do_banco=True precisa de um banco conectado")
@@ -59,6 +61,7 @@ def rodar(cnae: str, municipio: str, nicho: str, cidade: str, saida: str,
     })
     log.info("Execução %s iniciada: %s", execucao.id[:8], execucao.parametros)
 
+    leads: list[Lead] = []
     try:
         if do_banco:
             todos = carregar_leads(banco)
@@ -104,6 +107,12 @@ def rodar(cnae: str, municipio: str, nicho: str, cidade: str, saida: str,
                 salvar_execucao(execucao, banco)
             except Exception:
                 log.exception("Falha ao salvar a execução no banco")
+
+    if notificador is not None:
+        try:
+            notificador(montar_resumo(execucao, leads))
+        except Exception:
+            log.exception("Falha ao enviar o resumo no Telegram")
 
     return execucao
 
