@@ -51,6 +51,27 @@ docker run --rm --env-file .env -v "${PWD}/data:/app/data" robo-prospeccao pytho
 
 O `.env` (chaves) e a pasta `data/` não entram na imagem: são entregues só na hora do `docker run`.
 
+## API
+
+Uma API (FastAPI) lê os leads do Supabase e muda o status deles. É a base do painel.
+
+```
+pip install -r requirements.txt
+uvicorn robo.api.app:app --reload
+```
+
+Abra http://127.0.0.1:8000/docs para ver e testar os endereços:
+
+| Método | Endereço | O que faz |
+|---|---|---|
+| GET | `/saude` | confirma que a API está no ar |
+| GET | `/leads?status=novo&limite=50` | leads de maior nota primeiro (`status` e `limite` são opcionais; `limite` vai de 1 a 200) |
+| PATCH | `/leads/{cnpj}/status` | muda o status (`novo`, `aprovado`, `descartado`, `abordado`); corpo: `{"status": "aprovado"}` |
+
+Erros: `404` se o CNPJ não existe, `422` se o dado enviado é inválido, `502` se o Supabase está fora do ar.
+
+**A API não tem senha.** Por isso ela roda só no próprio computador (`127.0.0.1`). Não a exponha na internet antes de ter autenticação.
+
 ## Estrutura
 
 ```
@@ -60,6 +81,8 @@ src/robo/
   coletores/cnpj_receita.py     # lê a base da Receita e devolve Leads
   enriquecedores/site_do_email.py  # descobre o site pelo e-mail
   exportadores/ficha.py         # seleciona o top e gera a ficha em Markdown
+  api/schemas.py                # formato dos dados da API (Pydantic)
+  api/app.py                    # os endereços da API (FastAPI)
 scripts/                        # exploração e análise avulsas
 data/                           # bases e saídas, fora do Git
 ```
