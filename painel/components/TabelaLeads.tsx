@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Lead } from "@/lib/api";
 
 // A API devolve o código da Receita; o painel mostra o nome da cidade.
@@ -91,7 +92,11 @@ export default function TabelaLeads({ leads }: { leads: Lead[] }) {
             {visiveis.map((lead) => (
               <tr key={lead.cnpj} className="border-b border-zinc-200 align-top dark:border-zinc-800">
                 <td className="py-2 pr-4 font-semibold">{lead.nota}</td>
-                <td className="py-2 pr-4">{lead.nome}</td>
+                <td className="py-2 pr-4">
+                  <Link href={`/leads/${lead.cnpj}`} className="underline">
+                    {lead.nome}
+                  </Link>
+                </td>
                 <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">{lead.motivo_da_nota}</td>
                 <td className="py-2 pr-4">
                   <div className="flex flex-wrap gap-1">

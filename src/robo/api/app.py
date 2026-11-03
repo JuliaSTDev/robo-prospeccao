@@ -5,14 +5,12 @@ Para rodar (na raiz do projeto, com o ambiente ativado):
 Depois abra http://127.0.0.1:8000/docs
 """
 import logging
-from functools import lru_cache
-
 import requests
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
-
-from robo.api.schemas import LeadSaida, StatusEntrada, StatusLead
-from robo.armazenamento import atualizar_status, conectar, listar_leads
+from robo.api.schemas import LeadDetalhe, LeadSaida, StatusEntrada, StatusLead
+from robo.armazenamento import atualizar_status, buscar_lead, conectar, listar_leads
+from functools import lru_cache
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +48,19 @@ def listar(
     leads = listar_leads(banco, status=status.value if status else None, limite=limite)
     return [LeadSaida.de_lead(lead) for lead in leads]
 
+
+@app.get("/leads/{cnpj}", response_model=LeadDetalhe)
+def ver_lead(
+    cnpj: str = Path(pattern=r"^\d{14}$"),
+    banco=Depends(obter_banco),
+):
+    """A ficha completa de um lead, com os links de verificação."""
+    lead = buscar_lead(banco, cnpj)
+   
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+   
+    return LeadDetalhe.de_lead(lead)
 
 @app.patch("/leads/{cnpj}/status", response_model=LeadSaida)
 def mudar_status(
