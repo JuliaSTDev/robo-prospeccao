@@ -189,3 +189,9 @@ def atualizar_status(banco, cnpj: str, status: str) -> Lead | None:
     """Muda o status de um lead. Devolve o lead atualizado, ou None se o CNPJ não existe."""
     linhas = banco.atualizar("leads", filtros={"cnpj": cnpj}, valores={"status": status})
     return linha_para_lead(linhas[0]) if linhas else None
+
+
+def buscar_lead(banco, cnpj: str) -> Lead | None:
+    """Um lead pelo CNPJ, ou None se não existe."""
+    linhas = banco.ler("leads", ordem="cnpj", inicio=0, quantidade=1, filtros={"cnpj": cnpj})
+    return linha_para_lead(linhas[0]) if linhas else None

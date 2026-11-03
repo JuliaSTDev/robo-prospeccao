@@ -1,7 +1,8 @@
 from enum import Enum
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 from robo.models import Lead
+from robo.exportadores.ficha import montar_links, nome_para_busca
 
 class StatusLead(str, Enum):
     """Os status que um lead pode ter."""
@@ -9,7 +10,7 @@ class StatusLead(str, Enum):
     aprovado = "aprovado"
     descartado = "descartado"
     abordado = "abordado"
-
+    respondido = "respondido"
 
 class StatusEntrada(BaseModel):
     """Corpo do PATCH: {"status": "aprovado"}."""
@@ -47,4 +48,39 @@ class LeadSaida(BaseModel):
             municipio=lead.municipio, 
             porte=lead.porte,
             data_abertura=lead.data_abertura
+        )
+
+# A API devolve o código da Receita; a ficha mostra e usa o nome da cidade.
+CIDADES = {"7107": "São Paulo", "7151": "Suzano"}
+
+
+class LeadDetalhe(LeadSaida):
+    """A ficha completa: tudo do LeadSaida mais o que a página do lead mostra."""
+    razao_social: str
+    nome_fantasia: str | None = None
+    cnae: str
+    uf: str
+    matriz_filial: str
+    site_motivo: str
+    cidade: str
+    coletado_em: datetime
+    links: dict[str, str]    # nome do link -> endereço (Google, Instagram...)
+
+    @classmethod
+    def de_lead(cls, lead: Lead) -> "LeadDetalhe":
+        """Converte o Lead do robô na ficha completa."""
+        base = LeadSaida.de_lead(lead)    # reaproveita a conversão que já existe
+        cidade = CIDADES.get(lead.municipio, f"município {lead.municipio}")
+        return cls(
+            **base.model_dump(),          # copia todos os campos do LeadSaida
+            razao_social=lead.razao_social,
+            nome_fantasia=lead.nome_fantasia,   
+            cnae=lead.cnae,
+            uf=lead.uf,
+            matriz_filial=lead.matriz_filial,
+            site_motivo=lead.site_motivo,
+            coletado_em=lead.coletado_em,
+            cidade=cidade,
+            links =montar_links(nome_para_busca(lead), cidade)
+
         )

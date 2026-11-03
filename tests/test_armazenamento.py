@@ -7,6 +7,7 @@ from robo import armazenamento
 from robo.armazenamento import (
     Banco,
     atualizar_status,
+    buscar_lead,
     carregar_leads,
     lead_para_linha,
     linha_para_lead,
@@ -315,3 +316,20 @@ def test_atualizar_manda_patch_pedindo_a_linha_de_volta(monkeypatch):
     assert enviado["json"] == {"status": "aprovado"}
     assert enviado["headers"]["Prefer"] == "return=representation"
     assert linhas == [{"cnpj": "1"}]
+
+
+# ---------- buscar_lead ----------
+
+def test_buscar_lead_devolve_o_lead_certo(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    lead = buscar_lead(banco, "22222222000101")
+
+    assert isinstance(lead, Lead)           # um Lead só, e não uma lista nem um dicionário
+    assert lead.cnpj == "22222222000101"
+    assert lead.nota == 8
+
+
+def test_buscar_lead_de_cnpj_inexistente_devolve_none(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+    assert buscar_lead(banco, "99999999000199") is None

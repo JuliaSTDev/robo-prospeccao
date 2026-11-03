@@ -100,3 +100,32 @@ def test_banco_fora_do_ar_da_502():
 
     assert resposta.status_code == 502
     assert resposta.json() == {"detail": "Banco de dados indisponível"}
+
+
+# ---------- ficha do lead e status "respondido" ----------
+
+def test_ver_lead_devolve_a_ficha_completa(cliente):
+    resposta = cliente.get(f"/leads/{CNPJ_B}")
+
+    assert resposta.status_code == 200
+    ficha = resposta.json()
+    assert ficha["cnpj"] == CNPJ_B
+    assert ficha["razao_social"] == "ESCOLA TESTE LTDA"
+    assert ficha["cidade"] == "São Paulo"          # o código 7107 vira o nome
+    assert list(ficha["links"]) == ["Google", "Instagram", "Reclame Aqui", "Meta Ad Library"]
+
+
+def test_ver_lead_inexistente_da_404(cliente):
+    resposta = cliente.get("/leads/99999999999999")
+    assert resposta.status_code == 404
+    assert resposta.json() == {"detail": "Lead não encontrado"}
+
+
+def test_ver_lead_com_cnpj_invalido_da_422(cliente):
+    assert cliente.get("/leads/123").status_code == 422
+
+
+def test_mudar_status_para_respondido(cliente):
+    resposta = cliente.patch(f"/leads/{CNPJ_B}/status", json={"status": "respondido"})
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] == "respondido"
