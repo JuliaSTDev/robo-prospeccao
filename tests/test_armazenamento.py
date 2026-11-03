@@ -6,14 +6,16 @@ import pytest
 from robo import armazenamento
 from robo.armazenamento import (
     Banco,
+    atualizar_status,
     carregar_leads,
     lead_para_linha,
     linha_para_lead,
+    listar_leads,
     salvar_execucao,
     salvar_leads,
     verificar_conexao,
 )
-from robo.models import Execucao
+from robo.models import Execucao, Lead
 
 
 # ---------- lead <-> linha ----------
@@ -172,3 +174,144 @@ def test_resposta_de_erro_vira_excecao_com_o_motivo(monkeypatch):
 
     with pytest.raises(RuntimeError, match="401.*Invalid API key"):
         banco.enviar("leads", [{"cnpj": "1"}], chave_unica="cnpj")
+
+
+# ---------- listar_leads / atualizar_status (banco falso) ----------
+
+def linhas_de_exemplo(criar_lead):
+    """Três leads: nota 3 (novo), nota 8 (novo) e nota 5 (aprovado)."""
+    linhas = []
+    for cnpj, nota, status in [("11111111000101", 3, "novo"), ("22222222000101", 8, "novo"), ("33333333000101", 5, "aprovado")]:
+        linha = lead_para_linha(criar_lead(cnpj=cnpj, nota=nota))
+        linha["status"] = status      # o banco devolve o status; nós nunca o enviamos
+        linhas.append(linha)
+    return linhas
+
+
+def test_listar_leads_traz_a_maior_nota_primeiro(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    leads = listar_leads(banco)
+
+    assert [lead.nota for lead in leads] == [8, 5, 3]
+
+
+def test_listar_leads_filtra_por_status(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    leads = listar_leads(banco, status="novo")
+
+    assert [lead.nota for lead in leads] == [8, 3]
+
+
+def test_listar_leads_respeita_o_limite(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    leads = listar_leads(banco, limite=1)
+
+    assert [lead.nota for lead in leads] == [8]     # o 1 que vem é o de maior nota
+
+
+def test_listar_leads_devolve_objetos_lead(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+    assert all(isinstance(lead, Lead) for lead in listar_leads(banco))
+
+
+def test_atualizar_status_devolve_o_lead_atualizado(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    lead = atualizar_status(banco, "22222222000101", "descartado")
+
+    assert isinstance(lead, Lead)           # um Lead só, e não uma lista nem um dicionário
+    assert lead.cnpj == "22222222000101"
+    assert lead.status == "descartado"
+
+
+def test_atualizar_status_muda_so_o_lead_pedido(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+
+    atualizar_status(banco, "22222222000101", "descartado")
+
+    status_por_cnpj = {linha["cnpj"]: linha["status"] for linha in banco.tabelas["leads"]}
+    assert status_por_cnpj == {
+        "11111111000101": "novo",
+        "22222222000101": "descartado",     # só este mudou
+        "33333333000101": "aprovado",
+    }
+
+
+def test_atualizar_status_de_cnpj_inexistente_devolve_none(criar_lead, criar_banco):
+    banco = criar_banco({"leads": linhas_de_exemplo(criar_lead)})
+    assert atualizar_status(banco, "99999999000199", "aprovado") is None
+
+
+# ---------- Banco de verdade: o que vai na URL (a requisição é falsa, sem rede) ----------
+
+def test_ler_com_filtro_e_ordem_decrescente_monta_a_url_certa(monkeypatch):
+    enviado = {}
+
+    class Resposta:
+        ok = True
+
+        def json(self):
+            return []
+
+    def get_falso(url, params, timeout):
+        enviado.update(url=url, params=params)
+        return Resposta()
+
+    banco = Banco("https://abc.supabase.co", "sb_secret_exemplo")
+    monkeypatch.setattr(banco.sessao, "get", get_falso)
+
+    banco.ler("leads", ordem="nota", inicio=0, quantidade=20, filtros={"status": "novo"}, descendente=True)
+
+    assert enviado["url"] == "https://abc.supabase.co/rest/v1/leads"
+    assert enviado["params"]["order"] == "nota.desc,cnpj.asc"     # CNPJ desempata
+    assert enviado["params"]["status"] == "eq.novo"
+    assert enviado["params"]["limit"] == 20
+
+
+def test_ler_sem_filtro_e_ordem_crescente_mantem_o_comportamento_antigo(monkeypatch):
+    enviado = {}
+
+    class Resposta:
+        ok = True
+
+        def json(self):
+            return []
+
+    def get_falso(url, params, timeout):
+        enviado.update(params=params)
+        return Resposta()
+
+    banco = Banco("https://abc.supabase.co", "sb_secret_exemplo")
+    monkeypatch.setattr(banco.sessao, "get", get_falso)
+
+    banco.ler("leads", ordem="cnpj", inicio=0, quantidade=1)
+
+    assert enviado["params"] == {"select": "*", "order": "cnpj.asc", "offset": 0, "limit": 1}
+
+
+def test_atualizar_manda_patch_pedindo_a_linha_de_volta(monkeypatch):
+    enviado = {}
+
+    class Resposta:
+        ok = True
+
+        def json(self):
+            return [{"cnpj": "1"}]
+
+    def patch_falso(url, params, json, headers, timeout):
+        enviado.update(url=url, params=params, json=json, headers=headers)
+        return Resposta()
+
+    banco = Banco("https://abc.supabase.co", "sb_secret_exemplo")
+    monkeypatch.setattr(banco.sessao, "patch", patch_falso)
+
+    linhas = banco.atualizar("leads", filtros={"cnpj": "1"}, valores={"status": "aprovado"})
+
+    assert enviado["url"] == "https://abc.supabase.co/rest/v1/leads"
+    assert enviado["params"] == {"cnpj": "eq.1"}                   # filtro: sem ele o PATCH mudaria a tabela toda
+    assert enviado["json"] == {"status": "aprovado"}
+    assert enviado["headers"]["Prefer"] == "return=representation"
+    assert linhas == [{"cnpj": "1"}]

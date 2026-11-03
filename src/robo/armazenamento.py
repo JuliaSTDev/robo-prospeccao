@@ -1,18 +1,9 @@
-"""Guarda os leads e as execuções no Supabase (Postgres).
 
-Tudo que fala com o banco fica neste arquivo. O resto do robô só chama
-salvar_leads / carregar_leads / salvar_execucao e recebe o banco como parâmetro:
-nos testes entra um banco falso, sem internet.
-
-Como se conversa com o Supabase: pela API REST (HTTP), com a biblioteca requests.
-"""
 import logging
 import os
-from datetime import date, datetime
-
 import requests
-
 from robo.models import Execucao, Lead
+from datetime import date, datetime
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +35,27 @@ class Banco:
         )
         _conferir(resposta)
 
-    def ler(self, tabela: str, ordem: str, inicio: int, quantidade: int) -> list[dict]:
-        """Lê `quantidade` linhas a partir da posição `inicio`, ordenadas por `ordem`."""
-        resposta = self.sessao.get(
+    def ler(self, tabela: str, ordem: str, inicio: int, quantidade: int,
+            filtros: dict[str, str] | None = None, descendente: bool = False) -> list[dict]:
+
+            ordenacao = f"{ordem}.desc,cnpj.asc" if descendente else f"{ordem}.asc"
+            params = {"select": "*", "order": ordenacao, "offset": inicio, "limit": quantidade}
+        
+            for coluna, valor in (filtros or {}).items():
+                params[coluna] = f"eq.{valor}"
+        
+            resposta = self.sessao.get(f"{self.base}/{tabela}", params=params, timeout=60)
+            _conferir(resposta)
+            return resposta.json()
+
+    def atualizar(self, tabela: str, filtros: dict[str, str], valores: dict) -> list[dict]:
+    
+        params = {coluna: f"eq.{valor}" for coluna, valor in (filtros or {}).items()}
+        resposta = self.sessao.patch(
             f"{self.base}/{tabela}",
-            params={"select": "*", "order": f"{ordem}.asc", "offset": inicio, "limit": quantidade},
+            params=params,
+            json=valores,
+            headers={"Prefer": "return=representation"},
             timeout=60,
         )
         _conferir(resposta)
@@ -168,3 +175,17 @@ def salvar_execucao(execucao: Execucao, banco) -> None:
         "qtd_erros": execucao.qtd_erros,
     }
     banco.enviar("execucoes", [linha], chave_unica="id")
+
+
+def listar_leads(banco, status: str | None = None, limite: int = 50) -> list[Lead]:
+    """Os leads de maior nota primeiro. Com `status`, só os que estão nesse status."""
+    filtros = {"status": status} if status else None
+    linhas = banco.ler("leads", ordem="nota", inicio=0, quantidade=limite, filtros=filtros, descendente=True)
+    leads: list[Lead] = [linha_para_lead(linha) for linha in linhas]
+    return leads
+
+
+def atualizar_status(banco, cnpj: str, status: str) -> Lead | None:
+    """Muda o status de um lead. Devolve o lead atualizado, ou None se o CNPJ não existe."""
+    linhas = banco.atualizar("leads", filtros={"cnpj": cnpj}, valores={"status": status})
+    return linha_para_lead(linhas[0]) if linhas else None
