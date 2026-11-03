@@ -72,6 +72,26 @@ Erros: `404` se o CNPJ não existe, `422` se o dado enviado é inválido, `502` 
 
 **A API não tem senha.** Por isso ela roda só no próprio computador (`127.0.0.1`). Não a exponha na internet antes de ter autenticação.
 
+## Painel
+
+Painel web (Next.js + TypeScript) que mostra a fila de leads: ordenada por nota, com filtros por status, cidade e sinais e uma busca por nome. Ele lê a API do robô no servidor, então a API precisa estar rodando.
+
+Em dois terminais:
+
+```
+# terminal 1, na raiz do projeto (ambiente Python ativado)
+uvicorn robo.api.app:app --reload
+
+# terminal 2
+cd painel
+npm install     # só na primeira vez
+npm run dev
+```
+
+Abra http://localhost:3000. Se a API estiver em outro endereço, defina `API_URL` (por exemplo em `painel/.env.local`, que fica fora do Git).
+
+O painel mostra os 200 leads de maior nota (o limite da API) e filtra por cima deles. Ainda não tem login: roda só no próprio computador.
+
 ## Estrutura
 
 ```
@@ -83,6 +103,7 @@ src/robo/
   exportadores/ficha.py         # seleciona o top e gera a ficha em Markdown
   api/schemas.py                # formato dos dados da API (Pydantic)
   api/app.py                    # os endereços da API (FastAPI)
+painel/                         # painel web (Next.js + TypeScript)
 scripts/                        # exploração e análise avulsas
 data/                           # bases e saídas, fora do Git
 ```
