@@ -2,6 +2,8 @@
 import logging
 import os
 import requests
+from robo.cidades import nome_da_cidade
+from robo.exportadores.ficha import montar_links, nome_para_busca
 from robo.models import Execucao, Lead
 from datetime import date, datetime
 
@@ -91,7 +93,10 @@ def lead_para_linha(lead: Lead) -> dict:
 
     O status NÃO vai de propósito: no primeiro envio o banco coloca 'novo' sozinho,
     e nos envios seguintes o status que a Julia mudou à mão não é sobrescrito.
+    A cidade e os links de verificação são calculados aqui e gravados prontos,
+    para o painel (que não roda Python) só ler.
     """
+    cidade = nome_da_cidade(lead.municipio)
     return {
         "cnpj": lead.cnpj,
         "razao_social": lead.razao_social,
@@ -110,6 +115,8 @@ def lead_para_linha(lead: Lead) -> dict:
         "sinais": sorted(lead.sinais),
         "nota": lead.nota,
         "motivo_da_nota": lead.motivo_da_nota,
+        "cidade": cidade,
+        "links": montar_links(nome_para_busca(lead), cidade),
         "coletado_em": lead.coletado_em.isoformat(),
     }
 

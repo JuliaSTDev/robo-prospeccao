@@ -47,6 +47,20 @@ def test_status_nunca_e_enviado(criar_lead):
     assert "status" not in lead_para_linha(criar_lead(status="aprovado"))
 
 
+def test_linha_tem_cidade_e_links(criar_lead):
+    linha = lead_para_linha(criar_lead(municipio="7107", nome_fantasia="Escola Ação"))
+
+    assert linha["cidade"] == "São Paulo"
+    assert set(linha["links"]) == {"Google", "Instagram", "Reclame Aqui", "Meta Ad Library"}
+    assert "Escola" in linha["links"]["Google"]
+    assert "S%C3%A3o+Paulo" in linha["links"]["Google"]    # a cidade entra na busca
+
+
+def test_cidade_desconhecida_vira_o_codigo(criar_lead):
+    linha = lead_para_linha(criar_lead(municipio="9999"))
+    assert linha["cidade"] == "município 9999"
+
+
 def test_lead_sem_data_de_abertura_e_sem_sinais(criar_lead):
     lead = criar_lead(data_abertura=None)
     linha = lead_para_linha(lead)

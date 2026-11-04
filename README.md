@@ -74,23 +74,30 @@ Erros: `404` se o CNPJ não existe, `422` se o dado enviado é inválido, `502` 
 
 ## Painel
 
-Painel web (Next.js + TypeScript) que mostra a fila de leads: ordenada por nota, com filtros por status, cidade e sinais e uma busca por nome. Ele lê a API do robô no servidor, então a API precisa estar rodando.
+Painel web (Next.js + TypeScript) com a identidade visual da JS Soluções. Mostra a fila de leads, ordenada por nota, com filtros por status, cidade e sinais e busca por nome. Cada lead tem uma ficha com contato, sinais, links para verificar à mão e botões para mudar o status (novo, aprovado, descartado, abordado, respondido).
 
-Em dois terminais:
+O painel lê e grava **direto no Supabase**, no servidor (Server Components e Server Actions). A FastAPI não é necessária para ele: ela continua sendo a API do robô.
+
+**Primeira vez:**
+
+1. Rode `sql/002_links_e_cidade.sql` no Supabase (SQL Editor). Ele cria as colunas `cidade` e `links`.
+2. Preencha as colunas dos leads que já estavam no banco (uso único, com o ambiente Python ativado): `python -X utf8 scripts/preencher_links.py`. Os leads novos já entram preenchidos.
+3. Crie `painel/.env.local` (fica fora do Git) com a chave **secreta** do Supabase. Nunca use o prefixo `NEXT_PUBLIC_`: a chave ignora o RLS e não pode chegar ao navegador.
 
 ```
-# terminal 1, na raiz do projeto (ambiente Python ativado)
-uvicorn robo.api.app:app --reload
+SUPABASE_URL=https://<projeto>.supabase.co
+SUPABASE_SECRET_KEY=<chave secreta>
+```
 
-# terminal 2
+**Rodar:**
+
+```
 cd painel
 npm install     # só na primeira vez
 npm run dev
 ```
 
-Abra http://localhost:3000. Se a API estiver em outro endereço, defina `API_URL` (por exemplo em `painel/.env.local`, que fica fora do Git).
-
-O painel mostra os 200 leads de maior nota (o limite da API) e filtra por cima deles. Ainda não tem login: roda só no próprio computador.
+Abra http://localhost:3000. O painel mostra os 200 leads de maior nota e filtra por cima deles. Ainda não tem login: roda só no próprio computador (o login vem depois, com Supabase Auth e RLS).
 
 ## Estrutura
 
@@ -103,7 +110,8 @@ src/robo/
   exportadores/ficha.py         # seleciona o top e gera a ficha em Markdown
   api/schemas.py                # formato dos dados da API (Pydantic)
   api/app.py                    # os endereços da API (FastAPI)
-painel/                         # painel web (Next.js + TypeScript)
+painel/                         # painel web (Next.js + TypeScript), lê o Supabase direto
+sql/                            # criação e migração das tabelas (rodar no Supabase)
 scripts/                        # exploração e análise avulsas
 data/                           # bases e saídas, fora do Git
 ```
