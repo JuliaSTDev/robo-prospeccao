@@ -1,11 +1,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BotoesStatus from "@/components/BotoesStatus";
+import NotaBadge from "@/components/ui/NotaBadge";
+import SinalChip from "@/components/ui/SinalChip";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { buscarLead } from "@/lib/api";
 
 // "2001-01-23" -> "23/01/2001" (sem usar Date, para o fuso horário não mudar o dia)
 function formatarData(iso: string | null): string {
   return iso ? iso.split("-").reverse().join("/") : "—";
+}
+
+function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-borda bg-superficie p-5 sm:p-6">
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-texto-suave">{titulo}</h2>
+      {children}
+    </section>
+  );
 }
 
 export default async function PaginaLead({ params }: { params: Promise<{ cnpj: string }> }) {
@@ -17,70 +29,105 @@ export default async function PaginaLead({ params }: { params: Promise<{ cnpj: s
   }
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <Link href="/" className="text-sm text-zinc-500 underline">
+    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm text-texto-suave transition-colors hover:text-marca-clara"
+      >
         ← Voltar para a fila
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold">{lead.nome}</h1>
-      <p className="mb-6 text-sm text-zinc-500">
-        {lead.razao_social} · {lead.cidade}/{lead.uf} · CNPJ {lead.cnpj}
-      </p>
-
-      <section className="mb-6">
-        <p className="text-lg">
-          <span className="font-semibold">Nota {lead.nota}</span> · status <strong>{lead.status}</strong>
-        </p>
-        <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{lead.motivo_da_nota}</p>
-        <BotoesStatus cnpj={lead.cnpj} atual={lead.status} />
-      </section>
-
-      <section className="mb-6">
-        <h2 className="mb-2 font-semibold">Sinais</h2>
-        <div className="flex flex-wrap gap-1">
-          {lead.sinais.map((s) => (
-            <span key={s} className="rounded bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
-              {s}
-            </span>
-          ))}
+      <header className="mt-5 flex items-start gap-4">
+        <NotaBadge nota={lead.nota} grande />
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{lead.nome}</h1>
+          <p className="mt-1 text-sm text-texto-suave">
+            {lead.razao_social} · {lead.cidade}/{lead.uf} · CNPJ {lead.cnpj}
+          </p>
         </div>
-      </section>
+      </header>
 
-      <section className="mb-6 text-sm">
-        <h2 className="mb-2 font-semibold">Contato</h2>
-        <p>Telefone: {lead.telefone ?? "—"}</p>
-        <p>E-mail: {lead.email ?? "—"}</p>
-        <p>
-          Site:{" "}
-          {lead.site ? (
-            <a href={lead.site} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-              {lead.site}
-            </a>
-          ) : (
-            "—"
-          )}{" "}
-          ({lead.site_situacao ?? "não verificado"}: {lead.site_motivo || "sem motivo registrado"})
-        </p>
-      </section>
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Secao titulo="Status">
+            <div className="mb-4 flex items-center gap-2 text-sm">
+              <span className="text-texto-suave">Agora:</span>
+              <StatusBadge status={lead.status} />
+            </div>
+            <BotoesStatus cnpj={lead.cnpj} atual={lead.status} />
+          </Secao>
 
-      <section className="mb-6">
-        <h2 className="mb-2 font-semibold">Verificar à mão</h2>
-        <ul className="list-disc space-y-1 pl-5 text-sm">
-          {Object.entries(lead.links).map(([nome, endereco]) => (
-            <li key={nome}>
-              <a href={endereco} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                {nome}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
+          <Secao titulo="Por que esta nota">
+            <p className="text-sm leading-relaxed">{lead.motivo_da_nota}</p>
+          </Secao>
 
-      <section className="text-sm text-zinc-500">
-        <p>
-          Aberta em {formatarData(lead.data_abertura)} · coletado em {new Date(lead.coletado_em).toLocaleString("pt-BR")}
-        </p>
-      </section>
+          <Secao titulo="Sinais">
+            <div className="flex flex-wrap gap-1.5">
+              {lead.sinais.map((s) => (
+                <SinalChip key={s} sinal={s} />
+              ))}
+            </div>
+          </Secao>
+        </div>
+
+        <div className="space-y-6">
+          <Secao titulo="Contato">
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-texto-suave">Telefone</dt>
+                <dd>{lead.telefone ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-texto-suave">E-mail</dt>
+                <dd className="break-all">{lead.email ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-texto-suave">Site</dt>
+                <dd>
+                  {lead.site ? (
+                    <a
+                      href={lead.site}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all text-marca-clara underline-offset-4 hover:underline"
+                    >
+                      {lead.site}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                  <p className="mt-0.5 text-xs text-texto-suave">
+                    {lead.site_situacao ?? "não verificado"}: {lead.site_motivo || "sem motivo registrado"}
+                  </p>
+                </dd>
+              </div>
+            </dl>
+          </Secao>
+
+          <Secao titulo="Verificar à mão">
+            <ul className="space-y-2">
+              {Object.entries(lead.links).map(([nome, endereco]) => (
+                <li key={nome}>
+                  <a
+                    href={endereco}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-h-11 items-center justify-between rounded-xl border border-borda px-4 text-sm transition-colors hover:border-marca/60 hover:text-marca-clara"
+                  >
+                    {nome}
+                    <span aria-hidden>↗</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </Secao>
+
+          <p className="px-1 text-xs text-texto-suave">
+            Aberta em {formatarData(lead.data_abertura)} · coletado em{" "}
+            {new Date(lead.coletado_em).toLocaleString("pt-BR")}
+          </p>
+        </div>
+      </div>
     </main>
   );
 }

@@ -2,8 +2,10 @@
 // Fala com a API do robô. Só é usado no servidor (Server Components), por isso não precisa de CORS.
 
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
-export const STATUS = ["novo", "aprovado", "descartado", "abordado", "respondido"] as const;
-export type Status = (typeof STATUS)[number];
+import { STATUS, type Status } from "./status";
+
+export { STATUS };
+export type { Status };
 
 // A ficha completa (o LeadDetalhe do Python): tudo do Lead mais o que a página do lead mostra.
 export interface LeadDetalhe extends Lead {
