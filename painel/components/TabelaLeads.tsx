@@ -3,6 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Lead } from "@/lib/api";
+import { ROTULOS, STATUS } from "@/lib/status";
+import NotaBadge from "@/components/ui/NotaBadge";
+import SinalChip from "@/components/ui/SinalChip";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 // A API devolve o código da Receita; o painel mostra o nome da cidade.
 const CIDADES: Record<string, string> = {
@@ -10,9 +14,22 @@ const CIDADES: Record<string, string> = {
   "7151": "Suzano",
 };
 
-const STATUS = ["novo", "aprovado", "descartado", "abordado"];
+const campo =
+  "h-10 rounded-xl border border-borda bg-superficie px-3 text-sm text-texto placeholder:text-texto-suave transition-colors hover:border-texto-suave/50";
 
-const campo = "rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+function LinkSite({ site }: { site: string | null }) {
+  if (!site) return <span className="text-texto-suave">—</span>;
+  return (
+    <a
+      href={site}
+      target="_blank"
+      rel="noreferrer"
+      className="relative z-10 text-marca-clara underline-offset-4 hover:underline"
+    >
+      abrir site ↗
+    </a>
+  );
+}
 
 export default function TabelaLeads({ leads }: { leads: Lead[] }) {
   const [busca, setBusca] = useState("");
@@ -33,26 +50,53 @@ export default function TabelaLeads({ leads }: { leads: Lead[] }) {
       (sinal === "" || lead.sinais.includes(sinal)),
   );
 
+  function limparFiltros() {
+    setBusca("");
+    setStatus("");
+    setCidade("");
+    setSinal("");
+  }
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar por status">
+        {["", ...STATUS].map((s) => {
+          const ativo = status === s;
+          const quantos = s === "" ? leads.length : leads.filter((lead) => lead.status === s).length;
+          return (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={ativo}
+              onClick={() => setStatus(s)}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+                ativo
+                  ? "border-marca/50 bg-marca/15 text-marca-clara"
+                  : "border-borda bg-superficie text-texto-suave hover:border-texto-suave/50 hover:text-texto"
+              }`}
+            >
+              {s === "" ? "Todos" : ROTULOS[s as keyof typeof ROTULOS]}
+              <span className="text-xs tabular-nums opacity-70">{quantos}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <input
           className={campo}
           placeholder="Buscar por nome"
+          aria-label="Buscar por nome"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
 
-        <select className={campo} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Todos os status</option>
-          {STATUS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select className={campo} value={cidade} onChange={(e) => setCidade(e.target.value)}>
+        <select
+          className={campo}
+          aria-label="Filtrar por cidade"
+          value={cidade}
+          onChange={(e) => setCidade(e.target.value)}
+        >
           <option value="">Todas as cidades</option>
           {Object.entries(CIDADES).map(([codigo, nome]) => (
             <option key={codigo} value={codigo}>
@@ -61,7 +105,12 @@ export default function TabelaLeads({ leads }: { leads: Lead[] }) {
           ))}
         </select>
 
-        <select className={campo} value={sinal} onChange={(e) => setSinal(e.target.value)}>
+        <select
+          className={campo}
+          aria-label="Filtrar por sinal"
+          value={sinal}
+          onChange={(e) => setSinal(e.target.value)}
+        >
           <option value="">Todos os sinais</option>
           {sinaisDisponiveis.map((s) => (
             <option key={s} value={s}>
@@ -71,58 +120,107 @@ export default function TabelaLeads({ leads }: { leads: Lead[] }) {
         </select>
       </div>
 
-      <p className="mb-2 text-sm text-zinc-500">
+      <p className="mb-3 text-sm text-texto-suave" aria-live="polite">
         {visiveis.length} de {leads.length} leads
       </p>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-300 text-zinc-500 dark:border-zinc-700">
-            <tr>
-              <th className="py-2 pr-4">Nota</th>
-              <th className="py-2 pr-4">Nome</th>
-              <th className="py-2 pr-4">Motivo</th>
-              <th className="py-2 pr-4">Sinais</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Telefone</th>
-              <th className="py-2">Site</th>
-            </tr>
-          </thead>
-          <tbody>
+      {visiveis.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-borda px-6 py-14 text-center">
+          <p className="font-medium">Nenhum lead com esses filtros</p>
+          <p className="mt-1 text-sm text-texto-suave">Tente outro termo ou limpe os filtros.</p>
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="mt-4 inline-flex min-h-10 items-center rounded-xl border border-borda bg-superficie px-4 text-sm transition-colors hover:border-marca/60 hover:text-marca-clara"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Computador: tabela */}
+          <div className="hidden overflow-hidden rounded-2xl border border-borda bg-superficie md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-borda text-xs uppercase tracking-wide text-texto-suave">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Nota</th>
+                  <th className="px-4 py-3 font-medium">Lead</th>
+                  <th className="px-4 py-3 font-medium">Sinais</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Contato</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {visiveis.map((lead) => (
+                  <tr key={lead.cnpj} className="align-top transition-colors hover:bg-texto/5">
+                    <td className="px-4 py-3">
+                      <NotaBadge nota={lead.nota} />
+                    </td>
+                    <td className="max-w-md px-4 py-3">
+                      <Link
+                        href={`/leads/${lead.cnpj}`}
+                        className="font-medium transition-colors hover:text-marca-clara"
+                      >
+                        {lead.nome}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-texto-suave">{lead.motivo_da_nota}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {lead.sinais.map((s) => (
+                          <SinalChip key={s} sinal={s} />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={lead.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <p>{lead.telefone ?? "—"}</p>
+                      <p className="mt-0.5 text-xs">
+                        <LinkSite site={lead.site} />
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Celular: um cartão por lead */}
+          <ul className="space-y-3 md:hidden">
             {visiveis.map((lead) => (
-              <tr key={lead.cnpj} className="border-b border-zinc-200 align-top dark:border-zinc-800">
-                <td className="py-2 pr-4 font-semibold">{lead.nota}</td>
-                <td className="py-2 pr-4">
-                  <Link href={`/leads/${lead.cnpj}`} className="underline">
-                    {lead.nome}
-                  </Link>
-                </td>
-                <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">{lead.motivo_da_nota}</td>
-                <td className="py-2 pr-4">
-                  <div className="flex flex-wrap gap-1">
-                    {lead.sinais.map((s) => (
-                      <span key={s} className="rounded bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
-                        {s}
-                      </span>
-                    ))}
+              <li
+                key={lead.cnpj}
+                className="relative rounded-2xl border border-borda bg-superficie p-4 transition-colors hover:border-texto-suave/40"
+              >
+                <div className="flex items-start gap-3">
+                  <NotaBadge nota={lead.nota} />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/leads/${lead.cnpj}`}
+                      className="font-semibold after:absolute after:inset-0 after:rounded-2xl"
+                    >
+                      {lead.nome}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-texto-suave">{lead.motivo_da_nota}</p>
                   </div>
-                </td>
-                <td className="py-2 pr-4">{lead.status}</td>
-                <td className="whitespace-nowrap py-2 pr-4">{lead.telefone ?? "—"}</td>
-                <td className="py-2">
-                  {lead.site ? (
-                    <a href={lead.site} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                      abrir
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-              </tr>
+                  <StatusBadge status={lead.status} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {lead.sinais.map((s) => (
+                    <SinalChip key={s} sinal={s} />
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span>{lead.telefone ?? "—"}</span>
+                  <LinkSite site={lead.site} />
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </>
+      )}
     </div>
   );
 }
