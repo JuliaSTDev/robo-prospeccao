@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from datetime import date, datetime
 from robo.models import Lead
 from robo.exportadores.ficha import montar_links, nome_para_busca
+from robo.cidades import nome_da_cidade
 
 class StatusLead(str, Enum):
     """Os status que um lead pode ter."""
@@ -50,8 +51,7 @@ class LeadSaida(BaseModel):
             data_abertura=lead.data_abertura
         )
 
-# A API devolve o código da Receita; a ficha mostra e usa o nome da cidade.
-CIDADES = {"7107": "São Paulo", "7151": "Suzano"}
+
 
 
 class LeadDetalhe(LeadSaida):
@@ -70,7 +70,7 @@ class LeadDetalhe(LeadSaida):
     def de_lead(cls, lead: Lead) -> "LeadDetalhe":
         """Converte o Lead do robô na ficha completa."""
         base = LeadSaida.de_lead(lead)    # reaproveita a conversão que já existe
-        cidade = CIDADES.get(lead.municipio, f"município {lead.municipio}")
+        cidade = nome_da_cidade(lead.municipio)
         return cls(
             **base.model_dump(),          # copia todos os campos do LeadSaida
             razao_social=lead.razao_social,
